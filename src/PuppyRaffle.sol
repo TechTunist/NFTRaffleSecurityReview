@@ -18,10 +18,14 @@ import {Base64} from "lib/base64/base64.sol";
 contract PuppyRaffle is ERC721, Ownable {
     using Address for address payable;
 
+    // @audit - naming convention for immutable : i_entranceFee
     uint256 public immutable entranceFee;
 
     address[] public players;
-    uint256 public raffleDuration;
+
+    // @audit - can some state variables can be const?
+
+    uint256 public raffleDuration; // @audit - const ?
     uint256 public raffleStartTime;
     address public previousWinner;
 
@@ -35,17 +39,17 @@ contract PuppyRaffle is ERC721, Ownable {
     mapping(uint256 => string) public rarityToName;
 
     // Stats for the common puppy (pug)
-    string private commonImageUri = "ipfs://QmSsYRx3LpDAb1GZQm7zZ1AuHZjfbPkD6J7s9r41xu1mf8";
-    uint256 public constant COMMON_RARITY = 70;
+    string private commonImageUri = "ipfs://QmSsYRx3LpDAb1GZQm7zZ1AuHZjfbPkD6J7s9r41xu1mf8"; // @audit - const?
+    uint256 public constant COMMON_RARITY = 70; 
     string private constant COMMON = "common";
 
     // Stats for the rare puppy (st. bernard)
-    string private rareImageUri = "ipfs://QmUPjADFGEKmfohdTaNcWhp7VGk26h5jXDA7v3VtTnTLcW";
+    string private rareImageUri = "ipfs://QmUPjADFGEKmfohdTaNcWhp7VGk26h5jXDA7v3VtTnTLcW"; // @audit - const?
     uint256 public constant RARE_RARITY = 25;
     string private constant RARE = "rare";
 
     // Stats for the legendary puppy (shiba inu)
-    string private legendaryImageUri = "ipfs://QmYx6GsYAKnNzZ9A6NvEKV9nf1VaDzJrqDR23Y8YSkebLU";
+    string private legendaryImageUri = "ipfs://QmYx6GsYAKnNzZ9A6NvEKV9nf1VaDzJrqDR23Y8YSkebLU"; // @audit - const?
     uint256 public constant LEGENDARY_RARITY = 5;
     string private constant LEGENDARY = "legendary";
 
@@ -83,6 +87,8 @@ contract PuppyRaffle is ERC721, Ownable {
         }
 
         // Check for duplicates
+        // @audit - this nested loop is reading from storage n^2 times, can be optimised by assigning the
+        // list of players to a local variable in function scope, or use a mapping, Do it in the for loop above before .push
         for (uint256 i = 0; i < players.length - 1; i++) {
             for (uint256 j = i + 1; j < players.length; j++) {
                 require(players[i] != players[j], "PuppyRaffle: Duplicate player");
@@ -93,12 +99,17 @@ contract PuppyRaffle is ERC721, Ownable {
 
     /// @param playerIndex the index of the player to refund. You can find it externally by calling `getActivePlayerIndex`
     /// @dev This function will allow there to be blank spots in the array
+    // @audit - should be external to prevent owner from calling it
+    //@ audit - Critical: This function is vulnerable to reentrancy attacks.
+    // The `sendValue` function is called before the state is updated.
+    // This allows the recipient to call a function on the sending contract that changes the state before the `sendValue` function is called.
+    // This can lead to unexpected behavior and vulnerabilities. Consider using the `transfer` function instead of `sendValue` to prevent reentrancy attacks.
     function refund(uint256 playerIndex) public {
         address playerAddress = players[playerIndex];
         require(playerAddress == msg.sender, "PuppyRaffle: Only the player can refund");
         require(playerAddress != address(0), "PuppyRaffle: Player already refunded, or is not active");
 
-        payable(msg.sender).sendValue(entranceFee);
+        payable(msg.sender).sendValue(entranceFee); // @audit - reentrancy? Reorder sendValue and state change?
 
         players[playerIndex] = address(0);
         emit RaffleRefunded(playerAddress);
