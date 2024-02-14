@@ -287,10 +287,14 @@ contract PuppyRaffleTest is Test {
         attackerContract.attack{value: entranceFee}();
 
         console.log("Starting attack contract balance: ", startingAttackContractBalance);
-        console.log("Starting contract balance: ", startingContractBalance);
+        console.log("Starting puppyRaffle contract balance: ", startingContractBalance);
 
         console.log("Ending attack contract balance: ", address(attackerContract).balance);
+        console.log("Ending puppyRaffle contract balance: ", address(puppyRaffle).balance);
     }
+
+
+    // WRITE A PROOF OF CODE FOR THE UNCHECKED MATH VULNERABILITY
 }
 
 // we need a contract to test the reentrancy attack

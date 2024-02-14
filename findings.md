@@ -89,5 +89,10 @@ function testDenialOfServiceAttack() public {
 
 The gas fees are over 100x higher with 1000 players instead of 100, which is 10x more entrants. 
 
-**Recommended Mitigation:** Use a mapping of addresses to entrants in the raffle instead of looping through the array. Create a maximum length for the array of entrants.
+**Recommended Mitigation:** There are a few recommendations:
+
+1. Use a mapping of addresses to entrants in the raffle instead of looping through the array. This allows constant time lookup for duplicates from a user's address. 
+2. Create a maximum length for the array of entrants.
+3. Consider allowing duplicates as players can create different addresses to enter from anyway.
+4. Alternatively you could use Openzeppelin's `EnumerableSet` library.
 
